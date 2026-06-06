@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,31 +29,33 @@ async def dashboard(
     )
     rows = result.scalars().all()
 
-    providers: Dict[str, ProviderQuotaResponse] = {}
+    _GB = 1_073_741_824  # bytes per GB
+    quotas = []
     grand_total = grand_used = grand_free = 0
 
     for row in rows:
         used_pct = (row.used_bytes / row.total_bytes * 100) if row.total_bytes else 0.0
-        providers[row.provider] = ProviderQuotaResponse(
+        ts_millis = None
+        if row.last_checked_at:
+            import calendar
+            ts_millis = int(calendar.timegm(row.last_checked_at.timetuple()) * 1000)
+        quotas.append(ProviderQuotaResponse(
             provider=row.provider,
-            total_bytes=row.total_bytes,
-            used_bytes=row.used_bytes,
-            free_bytes=row.free_bytes,
-            used_percent=round(used_pct, 2),
-            last_checked_at=row.last_checked_at,
-        )
+            total_gb=round(row.total_bytes / _GB, 3),
+            used_gb=round(row.used_bytes / _GB, 3),
+            free_gb=round(row.free_bytes / _GB, 3),
+            percent_used=round(used_pct, 2),
+            last_checked_at=ts_millis,
+        ))
         grand_total += row.total_bytes
         grand_used += row.used_bytes
         grand_free += row.free_bytes
 
-    overall_pct = (grand_used / grand_total * 100) if grand_total else 0.0
-
     return DashboardResponse(
-        providers=providers,
-        grand_total_bytes=grand_total,
-        grand_used_bytes=grand_used,
-        grand_free_bytes=grand_free,
-        overall_used_percent=round(overall_pct, 2),
+        quotas=quotas,
+        total_gb=round(grand_total / _GB, 3),
+        total_used_gb=round(grand_used / _GB, 3),
+        total_free_gb=round(grand_free / _GB, 3),
     )
 
 

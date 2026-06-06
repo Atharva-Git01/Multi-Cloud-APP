@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr
 
@@ -11,12 +11,10 @@ class OnboardingRequest(BaseModel):
 
 class AccountCreationStatus(BaseModel):
     provider: str
-    status: str           # "pending" | "success" | "failed" | "skipped"
-    message: Optional[str] = None
+    state: str            # "pending" | "success" | "failed" | "skipped"
+    error_message: Optional[str] = None
     account_email: Optional[str] = None
 
 
 class AccountCreationResponse(BaseModel):
-    task_id: str
-    statuses: Dict[str, AccountCreationStatus]
-    overall: str          # "pending" | "completed" | "partial"
+    statuses: List[AccountCreationStatus]

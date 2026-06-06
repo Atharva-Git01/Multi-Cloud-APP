@@ -1,17 +1,15 @@
 """Onboarding routes — batch account creation for new users."""
 from __future__ import annotations
 
-import asyncio
 import logging
-import uuid
-from typing import Dict
+from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.core.database import get_db
-from app.core.security import encrypt_token, get_current_user, get_password_hash
+from app.core.security import encrypt_token, get_password_hash
 from app.models.cloud_account import CloudAccount
 from app.models.user import User
 from app.schemas.onboarding import (
@@ -24,9 +22,6 @@ from app.services.providers.pcloud_provider import PCloudProvider
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
-
-# In-memory task store (use Redis in production)
-_task_store: Dict[str, AccountCreationResponse] = {}
 
 SELF_REGISTER_PROVIDERS = {"mega", "pcloud"}
 OAUTH_PROVIDERS = {"google", "onedrive", "box", "dropbox"}
@@ -47,16 +42,16 @@ async def _create_single_account(
     if provider in OAUTH_PROVIDERS:
         return AccountCreationStatus(
             provider=provider,
-            status="skipped",
-            message=f"{provider} requires OAuth — connect via /api/providers/connect",
+            state="skipped",
+            error_message=f"{provider} requires OAuth — connect via /api/providers/connect",
         )
 
     provider_cls = PROVIDER_MAP.get(provider)
     if provider_cls is None:
         return AccountCreationStatus(
             provider=provider,
-            status="failed",
-            message=f"Unknown provider: {provider}",
+            state="failed",
+            error_message=f"Unknown provider: {provider}",
         )
 
     try:
@@ -77,15 +72,15 @@ async def _create_single_account(
 
         return AccountCreationStatus(
             provider=provider,
-            status="success",
+            state="success",
             account_email=account.account_email,
         )
     except Exception as exc:
         logger.error("Account creation failed for %s: %s", provider, exc)
         return AccountCreationStatus(
             provider=provider,
-            status="failed",
-            message=str(exc),
+            state="failed",
+            error_message=str(exc),
         )
 
 
@@ -99,8 +94,6 @@ async def create_accounts(
     For providers that support programmatic registration (MEGA, pCloud) we
     create accounts immediately.  OAuth providers (Google, OneDrive, Box,
     Dropbox) are marked as `skipped` with redirect instructions.
-
-    A `task_id` is returned so the client can poll /status.
     """
     # Get or create the BBG user
     result = await db.execute(select(User).where(User.email == body.email))
@@ -116,8 +109,7 @@ async def create_accounts(
         await db.flush()
         await db.refresh(user)
 
-    task_id = str(uuid.uuid4())
-    statuses: Dict[str, AccountCreationStatus] = {}
+    statuses: List[AccountCreationStatus] = []
 
     for provider in body.providers:
         s = await _create_single_account(
@@ -127,31 +119,6 @@ async def create_accounts(
             user_id=str(user.id),
             db=db,
         )
-        statuses[provider] = s
+        statuses.append(s)
 
-    overall = "completed"
-    if any(s.status == "failed" for s in statuses.values()):
-        overall = "partial" if any(s.status == "success" for s in statuses.values()) else "failed"
-
-    response = AccountCreationResponse(
-        task_id=task_id,
-        statuses=statuses,
-        overall=overall,
-    )
-    _task_store[task_id] = response
-    return response
-
-
-@router.get("/status", response_model=AccountCreationResponse)
-async def onboarding_status(
-    task_id: str = Query(..., description="Task ID returned by /create-accounts"),
-    current_user: User = Depends(get_current_user),
-):
-    """Poll the status of a previously submitted account creation task."""
-    task = _task_store.get(task_id)
-    if task is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found.",
-        )
-    return task
+    return AccountCreationResponse(statuses=statuses)

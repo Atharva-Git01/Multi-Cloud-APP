@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Cloud shape -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30 C44,30 36,37 35,46 C29,47 24,52 24,58 C24,65 30,70 37,70 L71,70 C78,70 84,65 84,58 C84,52 79,47 73,46 C72,37 64,30 54,30 Z" />
+</vector>
