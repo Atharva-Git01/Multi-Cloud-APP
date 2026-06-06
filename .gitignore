@@ -1,0 +1,94 @@
+# ── Python ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+bbg-env/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ── Environment / Secrets ────────────────────────────────
+.env
+.env.*
+!.env.example
+*.env
+
+# ── OAuth credentials (never commit these) ───────────────
+credentials*.json
+token*.json
+tokens/
+*_token.json
+
+# ── Database / Runtime artefacts ─────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+test.db
+uploads/
+BBG_Cloud_Storage/
+
+# ── Alembic ──────────────────────────────────────────────
+# keep alembic/ tracked but ignore its generated versions cache
+alembic/versions/__pycache__/
+
+# ── Pytest / Coverage ────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# ── IDEs ─────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+*.swp
+*~
+
+# ── macOS ────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ── Windows ──────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ── Android ──────────────────────────────────────────────
+android/.gradle/
+android/local.properties
+android/build/
+android/app/build/
+android/captures/
+android/.cxx/
+android/*.apk
+android/*.aab
+android/keystore/
+android/app/src/main/assets/
+
+# Android local config (contains SDK path — machine-specific)
+android/local.properties
+
+# Google Services (contains API keys)
+android/app/google-services.json
+
+# Gradle wrapper jar (large binary, regenerated)
+android/gradle/wrapper/gradle-wrapper.jar
+
+# ── Logs ─────────────────────────────────────────────────
+*.log
+logs/
