@@ -1,0 +1,1237 @@
+BBG CLOUD APP
+Multi-Cloud Intelligent Storage Platform
+Master Implementation Plan — Version 2.0
+Version
+2.0  —  June 2025
+Platform
+Android (Kotlin) + Python Backend
+Cloud Providers
+Google Drive, OneDrive, MEGA, Box, pCloud, Dropbox
+Total Free Storage
+Up to 75 GB per user (aggregated)
+Table of Contents
+1.  Executive Summary
+2.  Core Concept: Intelligent Multi-Cloud Routing
+3.  Supported Cloud Platforms & Free Tier Allocation
+4.  Smart Storage Routing Engine
+5.  Onboarding & Auto Account Creation Flow
+6.  Product Requirements Document (PRD)
+7.  Technical Requirements Document (TRD)
+8.  Application Flow Design
+9.  UI/UX Design Specification
+10. Kotlin Android Implementation
+11. Backend Architecture
+12. Security & Compliance
+13. Test Plan
+14. Implementation Roadmap
+15. Risk Register
+1. Executive Summary
+BBG Cloud App is a multi-cloud file intelligence platform. It takes any file uploaded by the user — image, video, audio, document, or other media — and automatically routes it to the most appropriate free-tier cloud storage provider based on file type, size, and available capacity. The user never manually manages multiple cloud accounts. They sign up once with a single email and password, and BBG creates and manages all cloud accounts on their behalf.
+The aggregated free tier across all supported providers gives each user up to 75 GB of completely free, intelligently organised cloud storage — more than any single provider offers alone.
+Value Proposition
+✦  Single sign-in — one email/password manages everything
+✦  Automatic account creation on all selected cloud platforms
+✦  Smart routing — right file type goes to the right cloud
+✦  Full transparency — see all providers, space, and where each file lives
+✦  Up to 75 GB free storage by aggregating multiple platforms
+✦  Access all files from one unified app interface
+2. Core Concept: Intelligent Multi-Cloud Routing
+2.1  The Problem BBG Solves
+Free cloud storage is widely available, but fragmented. A user who signs up to Google Drive, OneDrive, MEGA, Box, and pCloud individually would have over 60 GB of free storage — but they would need five separate accounts, five apps, and no way to find files across them. BBG unifies all of this behind a single interface.
+2.2  How Routing Works
+When a user uploads a file, the Smart Routing Engine analyses three factors in priority order:
+File Category — MIME-type determines which cloud is the best semantic fit (e.g. documents to OneDrive, media to Google Drive).
+Available Capacity — The engine checks how full each cloud account is. If the preferred cloud is above 85% full, it falls over to the next best provider.
+File Size — Large files (>100 MB) are never sent to providers with per-file upload limits (Box free: 250 MB max). Very small files are bundled to avoid request overhead.
+2.3  Routing Decision Table
+File Type / Category
+Primary Provider
+Rationale
+Documents (.pdf, .doc, .txt, .xls, .ppt)
+OneDrive
+5 GB free, deep Office integration, best for docs
+Images (.jpg, .png, .gif, .heic, .raw)
+Google Drive
+15 GB free, Google Photos integration, large quota
+Videos (.mp4, .mov, .avi, .mkv)
+MEGA
+20 GB free, best free quota, good bandwidth for video
+Audio (.mp3, .wav, .flac, .aac)
+pCloud
+10 GB free, native media player, streaming support
+Archives (.zip, .rar, .7z, .tar)
+Box
+10 GB free (free plan), good for infrequent large files
+Other / Unknown
+Dropbox
+2 GB free, reliable fallback for misc files
+Overflow (any type, primary full)
+Next available by quota
+Routing engine selects next provider with most free space
+2.4  Overflow & Fallback Strategy
+If a primary provider's storage is above 85% full:
+Engine queries all provider quotas in real time via their respective APIs
+Selects the provider with the most remaining free space for that file category
+If all providers are above 90% full, user is notified with a storage dashboard alert
+User can manually choose to move files between providers from within the app
+3. Supported Cloud Platforms & Free Tier Allocation
+3.1  Platform Directory
+Provider
+Free GB
+Domain
+Auth Method
+API
+Best For
+Status
+Google Drive
+15 GB
+drive.google.com
+OAuth 2.0
+Files API v3
+Images, general files
+✅ Full support
+Microsoft OneDrive
+5 GB
+onedrive.live.com
+OAuth 2.0 (MSAL)
+Microsoft Graph API v1
+Documents, Office files
+✅ Full support
+MEGA
+20 GB
+mega.nz
+MEGA SDK / Custom
+MEGA SDK (megajs)
+Videos, large files
+✅ Full support
+Box
+10 GB
+box.com
+OAuth 2.0
+Box Content API v2
+Archives, enterprise docs
+✅ Full support
+pCloud
+10 GB
+pcloud.com
+OAuth 2.0
+pCloud REST API
+Audio, media streaming
+✅ Full support
+Dropbox
+2 GB
+dropbox.com
+OAuth 2.0
+Dropbox API v2
+Misc / fallback
+✅ Phase 2
+Internxt
+10 GB
+internxt.com
+OAuth 2.0 / SDK
+Internxt SDK
+Privacy-first backup
+🔄 Phase 3
+Proton Drive
+1 GB
+proton.me/drive
+Proton SDK
+Proton REST API
+Encrypted sensitive files
+🔄 Phase 3
+Total Free Storage Per User (Phase 1 + Phase 2)
+Google Drive:   15 GB
+OneDrive:        5 GB
+MEGA:           20 GB
+Box:            10 GB
+pCloud:         10 GB
+Dropbox:         2 GB
+─────────────────────
+TOTAL:          62 GB  (Phase 1+2 launch)
+Phase 3 additions:  +10 GB Internxt  +1 GB Proton Drive = 73 GB
+3.2  Key API Notes
+Google Drive
+Google Drive API v3 — well documented, stable, excellent Kotlin/Android SDK
+Requires Google Sign-In; same Google account used for BBG login
+15 GB shared with Gmail and Google Photos — engine monitors true remaining space
+File creation, folder creation, quota check all available via REST
+Microsoft OneDrive
+Uses Microsoft Graph API (/me/drive endpoints)
+MSAL (Microsoft Authentication Library) for Android handles OAuth flow
+Account created via Microsoft account registration flow (web-based OAuth)
+5 GB personal OneDrive free, separate from M365 subscription
+MEGA
+MEGA provides a JavaScript SDK (megajs) and an unofficial Python SDK (mega.py)
+Programmatic account creation via MEGA API is supported (email + password)
+20 GB free is the highest free quota of any mainstream provider
+Bandwidth limits apply on free tier (~5 GB/6h transfer); engine must throttle large uploads
+End-to-end encrypted by default — all keys are held client-side
+Box
+Box Content API v2 with full OAuth 2.0
+Free plan: 10 GB storage, 250 MB max single file upload size
+File size limit must be enforced by routing engine before routing to Box
+Box Developer Console used to create OAuth app for BBG
+pCloud
+pCloud REST API with OAuth 2.0
+Supports programmatic folder creation and file upload
+Native media streaming endpoint — ideal for audio/video served back to users
+Free account: 10 GB, no file size limit specified on free tier
+4. Smart Storage Routing Engine
+4.1  Engine Architecture
+RoutingEngine — Data Flow
+FileUploadRequest
+        │
+        ▼
+┌──────────────────────┐
+│  1. MIME Detector    │  ← python-magic (server-side MIME verification)
+│     → category       │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  2. Quota Fetcher    │  ← Parallel async calls to all provider APIs
+│     → quota_map      │     { 'google': {used: 8.2GB, total: 15GB}, ... }
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  3. Route Selector   │  ← Primary route by category + size constraints
+│     → provider       │     Falls back if primary > 85% full
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  4. Uploader         │  ← Async streaming upload to selected provider
+│     → remote_url     │     Emits progress events back to Android app
+└──────────┬───────────┘
+           │
+           ▼
+    SyncJob record saved to DB (provider, remote_path, status)
+4.2  Routing Algorithm — Pseudocode
+route_file(file, user_id) → provider
+def route_file(file: UploadedFile, user_id: str) -> ProviderName:
+    category = detect_category(file.mime_type)
+    quota_map = await fetch_all_quotas(user_id)   # parallel
+    primary = CATEGORY_ROUTING_TABLE[category]     # preferred provider
+    # Try primary provider first
+    if quota_map[primary].free_pct > 15:           # > 15% free remaining
+        if not exceeds_file_limit(file, primary):  # e.g. Box 250MB cap
+            return primary
+    # Fallback: sort remaining providers by free space, pick best
+    candidates = sorted(
+        [p for p in quota_map if p != primary and quota_map[p].free_pct > 10],
+        key=lambda p: quota_map[p].free_gb, reverse=True
+    )
+    for provider in candidates:
+        if not exceeds_file_limit(file, provider):
+            return provider
+    raise NoStorageAvailableError(user_id)
+4.3  Quota Monitoring Service
+A background task runs every 15 minutes per active user to refresh quota data and cache it in Redis. This ensures the routing engine always has near-real-time quota information without making live API calls on every upload.
+QuotaRefreshWorker — Python async task, Celery Beat or APScheduler
+Quota data cached in Redis with 15-minute TTL
+Android app polls /api/storage/dashboard every 5 minutes when app is in foreground
+Push notification sent when any provider crosses 80% full threshold
+5. Onboarding & Auto Account Creation Flow
+5.1  Onboarding Philosophy
+The onboarding experience is the most critical part of the product. Users should sign up once and have all their cloud accounts created and configured automatically. The user chooses which platforms they want included, and BBG handles everything else.
+5.2  Full Onboarding Screen Flow
+Onboarding Flow (Step by Step)
+SCREEN 1 — Welcome / Splash
+  • App logo + tagline: 'One app. Every cloud.'
+  • [Get Started] button
+SCREEN 2 — What is BBG? (Swipeable cards x3)
+  Card 1: 'Upload anything' — any file type accepted
+  Card 2: 'We sort it' — automatic categorisation + routing
+  Card 3: 'Stored free, everywhere' — 75GB across providers
+SCREEN 3 — Choose Your Email & Password
+  • Email field (used for ALL cloud accounts)
+  • Password field (meets requirements for ALL platforms)
+  • Password rules shown: 8+ chars, 1 uppercase, 1 number, 1 special char
+  • [Continue] button
+SCREEN 4 — Choose Your Cloud Platforms
+  • Grid of provider tiles (logo + name + free storage badge)
+  • Each tile has a checkbox: ✅ / ☐
+  • Google Drive — pre-selected, required (primary auth)
+  • OneDrive ✅ (recommended)
+  • MEGA ✅ (recommended — 20 GB)
+  • Box ☐ (optional)
+  • pCloud ☐ (optional)
+  • Dropbox ☐ (optional)
+  • Running total: 'Selected: 45 GB free storage'
+  • [Create My Accounts] button
+SCREEN 5 — Account Creation Progress
+  • Progress list showing each platform:
+    ✅ Google — Signed in via Google OAuth
+    ⏳ OneDrive — Creating Microsoft account...
+    ⏳ MEGA — Creating MEGA account...
+    ⏳ Box — Creating Box account...
+  • Each item animates as it completes
+  • Takes 15-30 seconds typically
+SCREEN 6 — All Set!
+  • Confirmation: 'Your 45 GB cloud vault is ready'
+  • Summary of connected platforms + their quotas
+  • [Go to Dashboard] button
+5.3  Auto Account Creation — Technical Implementation
+5.3.1  Google Drive
+Google Drive uses the existing Google OAuth flow. The user signs in with Google during step 3 — this is their primary identity. No separate account creation needed.
+5.3.2  Microsoft OneDrive — Auto Account Creation
+User's email + BBG-generated password sent to Microsoft account creation API
+Microsoft Account creation endpoint: https://signup.live.com/signup
+BBG backend automates this via Microsoft's account registration API (requires approved partner access) OR uses a guided WebView that pre-fills the email/password for the user to complete with a single tap
+OAuth2 flow via MSAL follows immediately after account creation
+Refresh token stored securely in BBG's database per user
+5.3.3  MEGA — Auto Account Creation
+MEGA API supports programmatic account creation via POST /cs endpoint
+Parameters: email (user's BBG email), password (hashed with MEGA's key-derivation)
+After creation, MEGA sends a verification email — BBG auto-clicks via email parsing OR guides user through a single email verification tap
+Uses megajs SDK on backend for all subsequent operations
+5.3.4  Box — Auto Account Creation
+Box Individual free accounts can be created via Box's registration API
+BBG uses OAuth2 App with Box to authenticate after creation
+250 MB per-file limit enforced at routing layer
+5.3.5  pCloud — Auto Account Creation
+pCloud REST API: POST /userregister with email + password creates free account instantly
+No email verification required for free accounts (unlike MEGA)
+Immediate OAuth token issuance after registration
+5.4  Email Verification Handling Strategy
+Verification Strategy
+For platforms that require email verification (MEGA, OneDrive):
+Option A — Guided Tap (Recommended for v1):
+  • BBG sends user a push notification: 'Tap to verify your MEGA account'
+  • Opens the verification email in a WebView inside the app
+  • User taps Verify — returns to app automatically
+Option B — Background Verification (v2 Feature):
+  • BBG backend uses IMAP to read the verification email
+  • Automatically clicks the verification link server-side
+  • Requires user to grant BBG inbox access (risky — deprioritise)
+For platforms with no verification (pCloud, Box):
+  • Accounts are live immediately — no user action needed
+6. Product Requirements Document (PRD)
+6.1  Problem Statement
+Users with large digital file collections are forced to manage multiple cloud accounts manually. Organising files is tedious; remembering which cloud stores what is error-prone; and most users don't know about — or bother with — every free-tier service available to them. BBG makes 60+ GB of free, organised cloud storage effortless.
+6.2  User Personas
+Persona
+Description
+Primary Need
+Nomad Creator
+Freelance photographer/videographer
+Auto-sort and back up media from shoots; never manually organise again
+Student
+College student, 18-25, heavy file usage
+Store lecture notes, PDFs, and recorded lectures automatically
+SMB Employee
+Works at a small business, uses Google Workspace
+Upload work files from phone without worrying about which cloud
+Privacy-Conscious User
+Knows about MEGA's encryption, wants privacy
+Know exactly where data lives; prefer encrypted-first routing
+Budget User
+Never pays for cloud storage
+Maximise free storage across all platforms; get the most from free tiers
+6.3  Core User Stories
+Authentication & Onboarding
+As a new user, I enter one email + password, select my preferred cloud platforms, and have all accounts created automatically without visiting each website.
+As a new user, I see a real-time progress screen showing each account being created.
+As a returning user, my session persists for 30 days; I never need to re-enter my password.
+As a user, I can add or remove cloud platforms after onboarding from Settings.
+File Upload & Intelligent Routing
+As a user, I upload a file and it is automatically routed to the most appropriate cloud provider.
+As a user, I can upload from the gallery, file manager, or via Android Share intent.
+As a user, I receive real-time upload progress per file and a success notification.
+As a user, I can see exactly which cloud provider each file was routed to.
+As a user, I am warned before any provider reaches 80% full and shown which one.
+Storage Dashboard
+As a user, I see a unified storage dashboard showing all connected providers, their used/free space, and a total aggregate.
+As a user, I can see a visual chart (progress bars or pie chart) per provider.
+As a user, I can tap a provider to see all files stored on that specific provider.
+File Management
+As a user, I can view all my files in a unified list, filtered by type or provider.
+As a user, I can move a file from one provider to another with a single tap.
+As a user, I can delete a file from within BBG and it is removed from the cloud.
+As a user, I can generate a shareable link for any file.
+Settings & Preferences
+As a user, I can set preferred routing rules (e.g. always route documents to Box).
+As a user, I can enable auto-sync on Wi-Fi only to save mobile data.
+As a user, I can export a CSV report of all files and their locations.
+7. Technical Requirements Document (TRD)
+7.1  High-Level Architecture
+System Architecture
+┌────────────────────────────────────────────────────────┐
+│              Android App (Kotlin + Compose)            │
+│  Auth → Onboarding → Dashboard → Upload → Files       │
+└─────────────────────────┬──────────────────────────────┘
+                          │ HTTPS REST / WebSocket
+┌─────────────────────────▼──────────────────────────────┐
+│           FastAPI Backend (Python 3.11+)               │
+│  ┌──────────┐ ┌──────────┐ ┌─────────┐ ┌──────────┐  │
+│  │Auth      │ │Upload /  │ │Storage  │ │Provider  │  │
+│  │Router    │ │Routing   │ │Dashboard│ │Mgmt      │  │
+│  └──────────┘ └──────────┘ └─────────┘ └──────────┘  │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │      Smart Routing Engine + Quota Fetcher        │  │
+│  └──────────────────────────────────────────────────┘  │
+└────┬────────┬────────┬──────────┬──────────┬───────────┘
+     │        │        │          │          │
+  Google  OneDrive  MEGA SDK   Box API   pCloud API
+  Drive   Graph                                    
+  API     API                                      
+     │        │        │          │          │
+     └────────┴────────┴──────────┴──────────┘
+                  Cloud Providers
+7.2  Core Backend Services
+Service
+Responsibility
+AuthService
+Google OAuth2, JWT issuance/refresh, session management
+ProviderAccountService
+Programmatic account creation on each cloud platform
+RoutingEngine
+MIME detection, quota fetch, route selection, fallback logic
+QuotaFetcherService
+Parallel async quota polling; Redis cache; push on threshold
+UploadStreamService
+Streaming multipart upload to selected provider; progress events
+SyncQueueWorker
+Celery/ARQ async tasks for background syncs and retries
+StorageDashboardService
+Aggregated quota + file stats for dashboard API endpoint
+FileMoveService
+Cross-provider file migration (download from A, upload to B, delete from A)
+ShareLinkService
+Generates public share URLs via each provider's sharing API
+7.3  Database Schema
+Table
+Key Columns
+users
+id, email, display_name, created_at, last_login
+cloud_accounts
+id, user_id, provider (enum), account_email, access_token_enc, refresh_token_enc, token_expiry, connected_at, is_active
+provider_quotas
+user_id, provider, total_bytes, used_bytes, free_bytes, last_checked_at
+files
+id, user_id, original_name, mime_type, category, size_bytes, uploaded_at, is_deleted
+sync_jobs
+id, file_id, provider, status, remote_path, remote_id, synced_at, retry_count, error_msg
+routing_overrides
+user_id, category, preferred_provider  (user custom rules)
+share_links
+id, file_id, provider, share_url, expires_at, created_at
+7.4  API Endpoints — Complete List
+Method
+Path
+Auth
+Description
+POST
+/api/auth/google/callback
+No
+OAuth callback, issue JWT pair
+POST
+/api/auth/refresh
+Refresh
+Rotate access token
+DELETE
+/api/auth/logout
+Yes
+Revoke tokens
+GET
+/api/auth/me
+Yes
+Current user profile
+POST
+/api/onboarding/create-accounts
+Yes
+Trigger auto-creation of selected cloud accounts
+GET
+/api/onboarding/status
+Yes
+Polling endpoint: account creation progress
+POST
+/api/files/upload
+Yes
+Upload file(s); returns file IDs + routes
+GET
+/api/files
+Yes
+Paginated file list (filter by category/provider)
+PATCH
+/api/files/{id}/move
+Yes
+Move file to different provider
+DELETE
+/api/files/{id}
+Yes
+Soft-delete file from cloud + DB
+POST
+/api/files/{id}/share
+Yes
+Generate share link
+GET
+/api/storage/dashboard
+Yes
+All providers: quota stats + totals
+POST
+/api/storage/refresh-quotas
+Yes
+Force quota refresh for user
+GET
+/api/providers
+Yes
+List all connected providers + status
+POST
+/api/providers/connect
+Yes
+Start OAuth for additional provider
+DELETE
+/api/providers/{name}
+Yes
+Disconnect + revoke tokens
+GET
+/api/providers/{name}/files
+Yes
+Files stored on a specific provider
+GET
+/api/routing/rules
+Yes
+User routing preferences
+PUT
+/api/routing/rules
+Yes
+Update routing preferences
+8. Application Flow Design
+8.1  Screen Inventory
+Screen
+Type
+Key Features
+Splash
+Entry
+Logo animation, auto-navigate after 1.5 s
+Onboarding Cards (×3)
+Informational
+Swipeable — What/How/How Much
+Email & Password Setup
+Auth/Onboarding
+Email field, password, strength meter
+Platform Selector
+Onboarding
+Provider tiles with checkboxes, running total GB
+Account Creation Progress
+Onboarding
+Animated checklist of platform setup status
+All Set! Confirmation
+Onboarding
+Summary card + go to dashboard
+Home Dashboard
+Core
+Stats bar, provider tiles, recent files, FAB
+Storage Dashboard
+Core
+Per-provider progress bars, total bar, alert banner
+Upload Sheet
+Modal/Bottom Sheet
+Source picker, file queue, upload button
+Upload Progress
+Modal
+Per-file animated progress rows
+Files — All
+Core
+Grid/list, category chips, provider filter
+Files — Provider View
+Core
+Files filtered to specific provider
+File Detail
+Detail
+Metadata, provider badge, move/share/delete
+Provider Management
+Settings
+Add/remove providers, reconnect OAuth
+Routing Rules
+Settings
+Category → provider preference overrides
+Settings
+Settings
+Wi-Fi only sync, notifications, export CSV
+Profile / Account
+Settings
+Email, sign out, delete account
+8.2  Navigation Graph
+Compose Navigation Structure
+NavHost
+ ├── auth_graph (startDestination = splash)
+ │    ├── splash
+ │    ├── onboarding_cards
+ │    ├── credential_setup      ← NEW: email + password
+ │    ├── platform_selector     ← NEW: choose providers
+ │    ├── account_creation      ← NEW: progress screen
+ │    └── onboarding_complete   ← NEW: all set screen
+ └── main_graph (startDestination = home)
+      ├── home
+      ├── storage_dashboard
+      ├── upload_sheet (bottomSheet)
+      ├── files_graph
+      │    ├── files_all
+      │    ├── files_by_provider/{providerName}
+      │    └── file_detail/{fileId}
+      └── profile_graph
+           ├── profile
+           ├── provider_management
+           ├── routing_rules
+           └── settings
+9. UI/UX Design Specification
+9.1  Design Principles
+Single Source of Truth — all clouds, one interface. The user never leaves BBG to manage storage.
+Transparency by Default — provider, location, and space data always visible, never buried.
+Delight in Automation — the auto-account creation sequence is a key 'wow' moment; animate it.
+Calm Aesthetics — navy + azure + teal palette; avoid the anxiety of flashing warnings.
+Accessible First — WCAG AA, min 48dp touch targets, TalkBack support throughout.
+9.2  Key New Screens — Design Detail
+Platform Selector Screen
+Grid of 2 columns — provider logo (48dp), provider name, free storage badge (e.g. '20 GB')
+Selected state: card border glows with accent2 (teal), checkbox becomes filled blue circle
+Running total at bottom: animated counter 'Selected: 0 GB → 15 GB → 35 GB...' as user taps
+Pre-selected (Google) has lock icon and cannot be deselected
+Recommended badge on MEGA ('Most Free Storage') and OneDrive ('Best for Documents')
+Account Creation Progress Screen
+Full-screen with a soft animated gradient background
+Vertical list of providers with status: ⏳ Pending / 🔄 Creating / ✅ Done / ❌ Failed
+Each row animates left-to-right as it completes (progress bar sweep)
+Lottie animation plays on completion of all accounts
+If one fails: shows retry button just for that provider; rest continue normally
+Storage Dashboard Screen
+Header: Total Available — large number (e.g. '62 GB') with subtitle '34.2 GB used'
+Total aggregate bar — a wide single progress bar showing overall usage
+Provider cards below — each shows: logo, name, [===---] bar, 'X GB of Y GB used'
+Colour-coded bars: green < 60%, amber 60-85%, red > 85%
+Tap any provider card → filters Files view to that provider
+'Add Provider' tile at the bottom of the provider list
+9.3  Design System
+Token
+Light Mode
+Dark Mode
+Usage
+primary
+#1A3C5E
+#5B9BD5
+App bars, primary actions
+secondary (accent2)
+#1ABC9C
+#1ABC9C
+FAB, selection, active states
+tertiary
+#F39C12
+#F5B942
+Warnings, storage > 80% alerts
+error
+#E74C3C
+#FF6B6B
+Errors, storage > 90%
+surface
+#FFFFFF
+#1C1C1E
+Cards, sheets
+background
+#F4F7FA
+#000000
+Screen backgrounds
+10. Kotlin Android Implementation
+10.1  New Kotlin Modules Required
+Module
+Responsibility
+:feature:onboarding
+Platform selector, credential setup, account creation screens + ViewModels
+:feature:dashboard
+Storage dashboard — quota charts, provider cards
+:feature:providers
+Provider management, connect/disconnect, OAuth flows per provider
+:feature:routing
+Routing rules settings screen
+:core:cloud-providers
+Provider-specific OAuth configs, API constants, token managers
+10.2  Key Kotlin Classes
+OnboardingViewModel.kt
+OnboardingViewModel.kt
+@HiltViewModel
+class OnboardingViewModel @Inject constructor(
+  private val createAccounts: CreateCloudAccountsUseCase,
+  private val getCreationStatus: GetAccountCreationStatusUseCase
+) : ViewModel() {
+  private val _selectedProviders = MutableStateFlow<Set<CloudProvider>>(setOf(GOOGLE))
+  val selectedProviders = _selectedProviders.asStateFlow()
+  val totalSelectedGB: StateFlow<Int> = selectedProviders.map { set ->
+    set.sumOf { it.freeStorageGB }
+  }.stateIn(viewModelScope, SharingStarted.Eagerly, 15)
+  fun toggleProvider(provider: CloudProvider) {
+    if (provider == GOOGLE) return  // cannot deselect Google
+    _selectedProviders.update {
+      if (provider in it) it - provider else it + provider
+    }
+  }
+  fun createAccounts(email: String, password: String) {
+    viewModelScope.launch {
+      createAccounts(email, password, _selectedProviders.value)
+        .collect { status -> _creationStatus.value = status }
+    }
+  }
+}
+StorageDashboardViewModel.kt
+StorageDashboardViewModel.kt
+@HiltViewModel
+class StorageDashboardViewModel @Inject constructor(
+  private val getDashboard: GetStorageDashboardUseCase
+) : ViewModel() {
+  val dashboardState: StateFlow<DashboardUiState> =
+    getDashboard()
+      .map { data -> DashboardUiState.Success(data) }
+      .catch { DashboardUiState.Error(it.message) }
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000),
+               DashboardUiState.Loading)
+}
+data class ProviderQuotaUi(
+  val provider: CloudProvider,
+  val usedGB: Float,
+  val totalGB: Float,
+  val percentUsed: Float,
+  val statusColor: Color   // Green / Amber / Red
+)
+10.3  CloudProvider Enum
+CloudProvider.kt
+enum class CloudProvider(
+  val displayName: String,
+  val freeStorageGB: Int,
+  val defaultCategory: FileCategory?,
+  val maxFileSizeMB: Int?   // null = no limit
+) {
+  GOOGLE("Google Drive",  15, FileCategory.IMAGES,    null),
+  ONEDRIVE("OneDrive",     5, FileCategory.DOCUMENTS, null),
+  MEGA("MEGA",            20, FileCategory.VIDEOS,    null),
+  BOX("Box",             10, FileCategory.ARCHIVES,  250),
+  PCLOUD("pCloud",       10, FileCategory.AUDIO,     null),
+  DROPBOX("Dropbox",      2, null,                   null),
+}
+11. Backend Architecture
+11.1  Provider Integration Services
+Google Drive (existing — keep + harden)
+google-auth-oauthlib (existing) — add JWT guard on routes
+Upgrade token storage from flat JSON to PostgreSQL oauth_tokens table
+OneDrive — New
+msal-python or microsoft-graph-api for OAuth token management
+Upload via Microsoft Graph: PUT /me/drive/items/{folder}:/{filename}:/content
+Quota check: GET /me/drive — returns quota.used + quota.total
+MEGA — New
+mega.py (Python library) for account creation and file operations
+mega.login(email, password) after programmatic account creation
+mega.upload(file_path, dest_folder) for streaming upload
+Bandwidth throttle: implement token-bucket rate limiter for MEGA uploads
+Box — New
+boxsdk Python library (official Box SDK)
+OAuth2 with JWTAuth for server-to-server operations
+Enforce 250 MB file size limit before routing to Box
+Quota: GET /users/me returns space_used + space_amount
+pCloud — New
+pcloud-sdk-python or direct REST API calls
+POST /userregister for account creation
+POST /uploadfile for file upload with folder selection
+GET /userinfo for quota data
+11.2  Provider Service Interface
+BaseCloudProvider interface (Python)
+class BaseCloudProvider(ABC):
+    @abstractmethod
+    async def create_account(self, email: str, password: str) -> ProviderAccount:
+        """Programmatically create a new account on this provider."""
+    @abstractmethod
+    async def upload_file(self, file: UploadFile, remote_folder: str,
+                          credentials: ProviderCredentials) -> RemoteFile:
+        """Upload a file and return its remote path and URL."""
+    @abstractmethod
+    async def get_quota(self, credentials: ProviderCredentials) -> QuotaInfo:
+        """Return used_bytes, total_bytes, free_bytes."""
+    @abstractmethod
+    async def delete_file(self, remote_id: str,
+                          credentials: ProviderCredentials) -> bool:
+        """Delete a file from this provider."""
+    @abstractmethod
+    async def get_share_link(self, remote_id: str,
+                             credentials: ProviderCredentials) -> str:
+        """Generate a public share URL."""
+12. Security & Compliance
+12.1  Auto Account Creation Security
+Critical Security Rules for Auto Account Creation
+1. User email + password are NEVER stored in BBG's database in plaintext.
+   They are used once during account creation, then discarded.
+   Only OAuth tokens (access + refresh) are persisted — AES-256 encrypted.
+2. The user's BBG password is separate from cloud provider passwords.
+   BBG generates strong random passwords for each provider account internally.
+   Users do not need to know these generated passwords.
+3. All OAuth tokens stored in PostgreSQL are encrypted at rest (AES-256).
+   Encryption key stored in environment variable / Vault — never in code.
+4. Programmatic account creation APIs are called over HTTPS only.
+5. MEGA encryption keys are never stored on BBG servers — MEGA is
+   end-to-end encrypted and keys are derived client-side.
+Credential Type
+Storage Location
+Protection Method
+BBG Login
+Email + bcrypt-hashed password in BBG DB
+Standard PBKDF2 hashing, 100k iterations
+Provider OAuth Tokens
+access_token + refresh_token only
+AES-256 encrypted in PostgreSQL
+Provider Passwords (auto-gen)
+Not stored — used once, discarded
+Random 20-char string; user never sees it
+MEGA Encryption Keys
+Not stored — derived from MEGA password client-side
+MEGA's own E2E key derivation
+Android Token Storage
+JWT in EncryptedSharedPreferences
+Android Keystore backed AES-256-GCM
+Network
+HTTPS enforced, certificate pinning in prod
+OkHttp CertificatePinner
+13. Test Plan
+13.1  Test Strategy
+Testing Pyramid
+         ╔═══════════════╗
+         ║   E2E  (5%)   ║  ← Maestro
+        ╔═════════════════════╗
+        ║  Integration  (20%) ║  ← Hilt + MockWebServer + Room
+       ╔═══════════════════════════╗
+       ║     Unit Tests  (75%)     ║  ← JUnit5 + MockK + Turbine
+       ╚═══════════════════════════╝
+13.2  Unit Tests — Android
+Test ID
+Test Case
+Condition
+Expected Result
+UT-VM-01
+OnboardingViewModel — toggle provider
+MEGA toggled
+selectedProviders includes MEGA; totalGB updates
+UT-VM-02
+OnboardingViewModel — cannot deselect Google
+Google toggled
+Google remains in selectedProviders
+UT-VM-03
+OnboardingViewModel — totalGB calculation
+4 providers selected
+Sum equals sum of free storage values
+UT-VM-04
+OnboardingViewModel — createAccounts emits status
+UseCase returns Flow
+uiState transitions from Loading → Creating → Done
+UT-VM-05
+OnboardingViewModel — one account fails
+Box creation fails
+Box shows Error; others continue
+UT-VM-06
+StorageDashboardViewModel — loads quotas
+API returns 5 quotas
+dashboardState = Success with 5 ProviderQuotaUi
+UT-VM-07
+StorageDashboardViewModel — error state
+API throws exception
+dashboardState = Error
+UT-VM-08
+UploadViewModel — routing info in result
+Upload succeeds
+result includes providerName and remote_path
+UT-VM-09
+FilesViewModel — filter by provider
+Provider = MEGA
+Flow emits only MEGA files
+UT-VM-10
+FilesViewModel — move file
+Move File A to OneDrive
+moveFile UseCase called; file updates to OneDrive
+13.3  Unit Tests — UseCases
+Test ID
+Test Case
+Condition
+Expected
+UT-UC-01
+CreateCloudAccountsUseCase — all succeed
+5 providers selected
+Returns Flow emitting 5 AccountCreated events
+UT-UC-02
+CreateCloudAccountsUseCase — partial failure
+MEGA API error
+Returns MEGA as AccountFailed; others as AccountCreated
+UT-UC-03
+RouteFileUseCase — primary quota available
+Google 30% full
+Routes image to Google
+UT-UC-04
+RouteFileUseCase — primary quota full
+Google 90% full
+Falls back to next provider by free space
+UT-UC-05
+RouteFileUseCase — Box file size limit
+File 300 MB, Box selected
+Skips Box; routes to next provider
+UT-UC-06
+RouteFileUseCase — all providers full
+All providers > 90%
+Throws NoStorageAvailableException
+UT-UC-07
+GetStorageDashboardUseCase — aggregates correctly
+5 provider quotas
+Returns total as sum of all free bytes
+UT-UC-08
+MoveFileUseCase — downloads then uploads
+Move from MEGA to Box
+MEGA delete called after Box upload succeeds
+13.4  Unit Tests — Backend (Python)
+Test ID
+Test Case
+Condition
+Expected
+BE-UT-01
+RoutingEngine.route_file — document → OneDrive
+PDF, OneDrive 30% full
+Returns ONEDRIVE
+BE-UT-02
+RoutingEngine.route_file — video → MEGA
+MP4, MEGA 40% full
+Returns MEGA
+BE-UT-03
+RoutingEngine.route_file — fallback on full
+MEGA 91% full, Box 40% full, video file
+Returns BOX (next highest free)
+BE-UT-04
+RoutingEngine.route_file — Box file size limit
+ZIP 300 MB routed to Box
+Skips Box; returns next provider
+BE-UT-05
+ProviderAccountService.create_mega_account
+Valid email/pass
+Returns ProviderAccount with MEGA tokens
+BE-UT-06
+ProviderAccountService.create_pcloud_account
+Valid email/pass
+Returns ProviderAccount with pCloud tokens
+BE-UT-07
+QuotaFetcherService.fetch_all — parallel calls
+Mock all provider APIs
+Returns QuotaMap with all 5 providers in < 2 s
+BE-UT-08
+JWT middleware — expired token
+Expired JWT in header
+Returns HTTP 401
+BE-UT-09
+Upload endpoint — no auth
+No Bearer token
+Returns HTTP 401
+BE-UT-10
+Upload endpoint — file too large
+File > 500 MB
+Returns HTTP 413
+BE-UT-11
+Storage dashboard endpoint
+Valid user, 4 providers
+Returns correct quota JSON for all providers
+13.5  Integration Tests — Android
+Test ID
+Test Case
+Tools
+Expected
+IT-AND-01
+Onboarding flow — account creation to Dashboard
+Hilt + MockWebServer
+Platform selector → progress screen → home navigates correctly
+IT-AND-02
+Storage dashboard loads provider quotas
+MockWebServer returns 5 providers
+Dashboard shows 5 provider cards with correct GB values
+IT-AND-03
+Upload routes to correct provider
+MockWebServer returns routing decision
+File card shows correct provider badge
+IT-AND-04
+Token refresh interceptor on 401
+MockWebServer returns 401 then 200
+Retry succeeds after refresh; original request completes
+IT-AND-05
+Offline upload queued + syncs on reconnect
+Disable network; upload; re-enable
+File appears in DB after sync worker runs
+IT-AND-06
+Room DAO — provider filter
+Insert files for 3 providers
+Query for MEGA returns only MEGA files
+13.6  Integration Tests — Backend
+Test ID
+Test Case
+Tools
+Expected
+BE-IT-01
+Full upload flow: upload → route → DB record
+pytest + httpx + TestDB
+File record + sync_job in DB; correct provider assigned
+BE-IT-02
+Account creation: pCloud account created
+pytest + mock pCloud API
+cloud_accounts row created with pCloud tokens
+BE-IT-03
+Account creation: MEGA account created
+pytest + mock MEGA SDK
+cloud_accounts row created with MEGA tokens
+BE-IT-04
+Dashboard returns live quotas
+pytest + mock provider APIs
+JSON matches quota mock data
+BE-IT-05
+Routing fallback integration
+pytest, set MEGA quota to 92%
+Route returns next available provider
+BE-IT-06
+Move file cross-provider
+pytest + mock APIs
+Old provider delete called; new provider upload called; DB updated
+13.7  UI Tests — Compose
+Test ID
+Screen
+Action
+Expected
+UI-01
+Platform Selector
+Tap MEGA tile
+Tile shows selected state; GB counter increments by 20
+UI-02
+Platform Selector
+Tap Google (pre-selected)
+Google remains selected; no change
+UI-03
+Account Creation Progress
+All accounts created
+All rows show ✅; Lottie animation plays
+UI-04
+Account Creation Progress
+One account fails
+Failed row shows ❌ with retry button
+UI-05
+Storage Dashboard
+Render with 5 providers
+5 provider cards visible with progress bars
+UI-06
+Storage Dashboard
+Provider at 87% full
+Progress bar amber; warning icon visible
+UI-07
+Files List
+Filter by MEGA
+Only MEGA-hosted files shown
+UI-08
+File Detail
+Tap Move
+Provider selection bottom sheet appears
+UI-09
+Onboarding
+Complete all 6 screens
+Dashboard renders after onboarding_complete
+13.8  E2E Tests — Critical Paths
+Test ID
+Scenario
+Tool
+Pass Criteria
+E2E-01
+Full onboarding: sign in, select 3 providers, all accounts created, land on dashboard
+Maestro
+Dashboard shows 3 providers with correct total GB
+E2E-02
+Upload JPEG → routed to Google Drive → visible in Files
+Maestro + Drive API check
+File in Files list with Google badge; in Drive folder
+E2E-03
+Upload PDF → routed to OneDrive → visible in Files
+Maestro + Graph API check
+File in Files list with OneDrive badge
+E2E-04
+Upload video → routed to MEGA → visible in Files
+Maestro
+File card shows MEGA badge
+E2E-05
+Move file from Google to MEGA
+Maestro
+File badge changes from Google to MEGA
+E2E-06
+Storage dashboard reflects actual quotas
+Maestro
+Progress bars match API-returned quota data
+E2E-07
+Add new provider post-onboarding → pCloud
+Maestro
+pCloud tile appears in dashboard
+E2E-08
+Offline upload → syncs on reconnect
+Maestro + adb toggle
+File appears in Files list after Wi-Fi re-enabled
+13.9  Performance Tests
+Test ID
+Test
+Tool
+Pass Threshold
+PERF-01
+Upload 10 MB file P95 latency
+k6
+≤ 5 s end-to-end (upload + routing + remote sync)
+PERF-02
+Quota fetch for 5 providers in parallel
+pytest-benchmark
+< 2 s (parallel async calls)
+PERF-03
+Storage dashboard API response time
+k6
+P95 < 500 ms (Redis cache hit)
+PERF-04
+Platform selector screen render
+Macrobenchmark
+< 200 ms on mid-range device
+PERF-05
+Account creation — 5 providers
+Manual timing
+All created within 30 s on 4G
+PERF-06
+Files list — 1,000 file scroll
+Macrobenchmark
+No jank; stable 60 FPS
+13.10  Security Tests
+Test ID
+Test
+Method
+Pass Criteria
+SEC-01
+Verify provider passwords not stored in BBG DB
+DB inspection post-onboarding
+No plaintext passwords in any DB table
+SEC-02
+OAuth tokens encrypted in DB
+DB inspection
+Tokens show as ciphertext; decrypt only with key
+SEC-03
+User A cannot access User B files
+pytest
+Returns 403 for cross-user file access
+SEC-04
+Upload without auth
+pytest
+Returns 401
+SEC-05
+Routing cannot be manipulated by client
+Tampered request
+Server-side routing overrides any client suggestions
+SEC-06
+Secrets not in git
+git-secrets scan + truffleHog
+Zero secrets detected
+SEC-07
+Certificate pinning active
+Charles Proxy MITM
+App refuses untrusted cert
+SEC-08
+MEGA tokens not logged
+Log inspection
+No MEGA credentials in application logs
+13.11  Coverage Targets
+Layer
+Target
+Tool
+Kotlin Unit (VM + UC + Repo)
+≥ 85%
+Kover
+Kotlin Integration
+≥ 70%
+Kover
+Backend Unit (Python)
+≥ 90%
+pytest-cov
+Backend Integration
+≥ 80%
+pytest-cov
+UI — Compose
+All key user journeys
+ComposeTestRule
+E2E
+100% of P0 paths (8 scenarios)
+Maestro CI
+14. Implementation Roadmap
+14.1  Phase Overview
+Phase
+Duration
+Deliverables
+Phase 0 — Security
+Week 1
+Rotate secrets, JWT auth, DB migration, .gitignore
+Phase 1 — Android Skeleton
+Weeks 2–3
+Kotlin project, DI, network layer, Google auth
+Phase 2 — Onboarding
+Weeks 4–5
+Credential setup, platform selector, auto account creation, progress screen
+Phase 3 — Core Upload + Routing
+Weeks 6–8
+Upload UI, routing engine, Google Drive + OneDrive + MEGA sync
+Phase 4 — Storage Dashboard
+Week 9
+Quota APIs, dashboard screen, real-time storage monitoring
+Phase 5 — Box + pCloud + Dropbox
+Weeks 10–11
+3 additional providers, file move, share links
+Phase 6 — Polish + Dark Mode
+Week 12
+Design system, animations, accessibility, dark mode
+Phase 7 — Testing + QA
+Week 13
+Coverage targets, E2E suite, perf, security scan
+Phase 8 — Launch
+Week 14
+Play Store, backend infra, monitoring, closed beta
+15. Risk Register
+ID
+Risk
+Likelihood
+Impact
+Mitigation
+R-01
+Auto account creation breaks if provider changes registration API
+MEDIUM
+HIGH
+Abstract account creation; monitor API changelogs; manual fallback (guided WebView)
+R-02
+MEGA bandwidth throttle disrupts large video uploads
+HIGH
+MEDIUM
+Implement token-bucket rate limiter; split uploads across off-peak; notify user
+R-03
+Email verification blocks seamless onboarding
+MEDIUM
+HIGH
+Guided in-app WebView verification; one-tap confirmation flow
+R-04
+Provider changes free tier quota (reduces GB)
+MEDIUM
+HIGH
+Quota data from live API, not hardcoded; alert user + re-route files
+R-05
+Box 250 MB file size limit surprises users
+LOW
+MEDIUM
+Routing engine enforces limit; UI shows per-provider constraints
+R-06
+Committed secrets exploited before rotation
+HIGH
+CRITICAL
+Rotate immediately (Phase 0 day 1); add git-secrets pre-commit hook
+R-07
+MEGA SDK dependency unmaintained
+LOW
+HIGH
+Abstract via BaseCloudProvider; swap to direct MEGA API calls if SDK breaks
+R-08
+App Store rejection for managing 3rd-party accounts
+LOW
+HIGH
+Add clear disclosure in onboarding; comply with each provider's ToS; review Google Play policy
+Document End
+BBG Cloud App — Master Implementation Plan v2.0
+Prepared: June 2025  |  Next review: Post-Phase 3 (Week 8)
+Sections: PRD • TRD • App Flow • UI/UX • Kotlin Spec • Backend • Security • Test Plan • Roadmap

@@ -302,3 +302,27 @@ fun BBGBottomNavBar(navController: NavController, currentRoute: String) {
         )
     }
 }
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, showSystemUi = true)
+@androidx.compose.runtime.Composable
+private fun HomeScreenPreview() {
+    com.bbg.cloudapp.ui.theme.BBGCloudTheme {
+        androidx.compose.material3.Scaffold(
+            topBar = {
+                androidx.compose.material3.TopAppBar(
+                    title = { androidx.compose.material3.Text("BBG Cloud", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) }
+                )
+            }
+        ) { padding ->
+            androidx.compose.foundation.layout.Box(
+                modifier = androidx.compose.ui.Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+                    .background(androidx.compose.material3.MaterialTheme.colorScheme.background),
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) {
+                androidx.compose.material3.Text("Home Screen Preview")
+            }
+        }
+    }
+}

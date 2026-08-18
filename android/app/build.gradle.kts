@@ -22,7 +22,7 @@ android {
             useSupportLibrary = true
         }
 
-        buildConfigField("String", "BASE_URL", "\"https://multi-cloud-app-3zwr.onrender.com/\"")
+        buildConfigField("String", "BASE_URL", "\"https://multi-cloud-app-3zwr.onrender.com/api/\"")
         buildConfigField("String", "GOOGLE_CLIENT_ID", "\"YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com\"")
     }
 
